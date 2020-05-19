@@ -1,4 +1,5 @@
 import bmesh
+import mathutils
 
 from ... import xray_io, utils, log
 from ...version_utils import IS_28
@@ -13,6 +14,18 @@ def _export_sg_new(bmfaces):
             if not edge.smooth:
                 sm_group |= (4, 2, 1)[eidx]
         yield sm_group
+
+def export_normal(bmfaces,bpy_obj):
+    normals = []
+    for fidx in bmfaces.faces:
+        for i in (0, 2, 1):
+            l  = fidx.loops[i]
+            if l.index == -1:
+                return []
+            loop = bpy_obj.data.loops[l.index]
+            normals.append(loop.normal)
+    return normals
+
 
 
 def _check_sg_soc(bmedges, sgroups):
@@ -150,7 +163,11 @@ def export_mesh(bpy_obj, bpy_root, cw, context):
     export_version(cw)
     export_mesh_name(cw, bpy_obj, bpy_root)
 
+
+    bpy_obj.data.calc_normals_split()
     bm = utils.convert_object_to_space_bmesh(bpy_obj, bpy_root.matrix_world)
+
+
     bml = bm.verts.layers.deform.verify()
 
     bad_vgroups = remove_bad_geometry(bm, bml, bpy_obj)
@@ -249,6 +266,12 @@ def export_mesh(bpy_obj, bpy_root, cw, context):
         writer.putf('I', sgroup)
     cw.put(fmt.Chunks.Mesh.SG, writer)
 
+    nrm  = export_normal(bm,bpy_obj)
+    writer = xray_io.PackedWriter()
+    for fidx in nrm:
+        writer.putf('fff', *main.pw_v3f(fidx))
+    cw.put(fmt.Chunks.Mesh.NORM, writer)
+    print('')
     writer = xray_io.PackedWriter()
     writer.putf('I', 1 + wmaps_cnt)
     if IS_28:

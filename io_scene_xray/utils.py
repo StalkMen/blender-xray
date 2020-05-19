@@ -9,7 +9,11 @@ from . import log
 from .version_utils import IS_28, multiply
 
 
+
 __FAKE_BONE_SUFFIX = '.fake'
+
+def pw_v3f(vec):
+    return vec[0], vec[2], vec[1]
 
 def is_fake_bone_name(bone_name):
     return bone_name.endswith(__FAKE_BONE_SUFFIX)
@@ -179,9 +183,9 @@ def convert_object_to_space_bmesh(bpy_obj, space_matrix, local=False):
         if IS_28:
             depsgraph = bpy.context.view_layer.depsgraph
             depsgraph.update()
-            mesh.from_object(bpy_obj, depsgraph)
+            mesh.from_object(bpy_obj, depsgraph,True,False,False)
         else:
-            mesh.from_object(bpy_obj, bpy.context.scene)
+            mesh.from_object(bpy_obj, bpy.context.scene,True,False,False)
     finally:
         for mod in armmods:
             mod.show_viewport = True
