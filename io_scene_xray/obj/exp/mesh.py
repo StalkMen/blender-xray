@@ -6,6 +6,12 @@ from ...version_utils import IS_28
 from .. import fmt
 from . import main
 
+def mesh_triangulate(me):
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bmesh.ops.triangulate(bm, faces=bm.faces)
+    bm.to_mesh(me)
+    bm.free()
 
 def _export_sg_new(bmfaces):
     for face in bmfaces:
@@ -26,7 +32,13 @@ def export_normal(bmfaces,bpy_obj):
             normals.append(loop.normal)
     return normals
 
-
+def export_normal_form_bm(bmfaces,bpy_obj):
+    normals = []
+    for fidx in bmfaces.faces:
+        for i in (0, 2, 1):
+            l  = fidx.loops[i]
+            normals.append(l.face.normal)
+    return normals
 
 def _check_sg_soc(bmedges, sgroups):
     for edge in bmedges:
@@ -163,8 +175,16 @@ def export_mesh(bpy_obj, bpy_root, cw, context):
     export_version(cw)
     export_mesh_name(cw, bpy_obj, bpy_root)
 
+    if bpy_obj.data.is_editmode:
+        raise ValueError("Must not export object in edit mode")
 
+
+    me = bmesh.new() ## bpy_obj.data.copy()
+    me.from_mesh(bpy_obj.data)
+
+    mesh_triangulate(bpy_obj.data)
     bpy_obj.data.calc_normals_split()
+
     bm = utils.convert_object_to_space_bmesh(bpy_obj, bpy_root.matrix_world)
 
 
@@ -267,11 +287,13 @@ def export_mesh(bpy_obj, bpy_root, cw, context):
     cw.put(fmt.Chunks.Mesh.SG, writer)
 
     nrm  = export_normal(bm,bpy_obj)
+    if not  nrm:
+        nrm  = export_normal_form_bm(bm,bpy_obj)
     writer = xray_io.PackedWriter()
     for fidx in nrm:
         writer.putf('fff', *main.pw_v3f(fidx))
     cw.put(fmt.Chunks.Mesh.NORM, writer)
-    print('')
+
     writer = xray_io.PackedWriter()
     writer.putf('I', 1 + wmaps_cnt)
     if IS_28:
@@ -298,4 +320,6 @@ def export_mesh(bpy_obj, bpy_root, cw, context):
             writer.putf('f', bm.verts[vidx][bml][vgi])
         writer.putf(str(len(vtx)) + 'I', *vtx)
     cw.put(fmt.Chunks.Mesh.VMAPS2, writer)
+
+    me.to_mesh(bpy_obj.data)
     return used_material_names
